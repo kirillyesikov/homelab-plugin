@@ -1,7 +1,5 @@
 package plugin
 
-package main
-
 import (
 	"context"
 	"net/http"
@@ -78,7 +76,7 @@ func (ds *testDataSource) handleTest(rw http.ResponseWriter, _ *http.Request) {
 }
 
 func main() {
-	err := datasource.Manage("myds-plugin-id", newDataSource, datasource.ManageOpts{})
+	err := datasource.Manage("homelab-kirill-datasource", newDataSource, datasource.ManageOpts{})
 	if err != nil {
 		backend.Logger.Error(err.Error())
 		os.Exit(1)
