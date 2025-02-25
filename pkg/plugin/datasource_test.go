@@ -1,4 +1,4 @@
-package plugin
+package main
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestQueryData(t *testing.T) {
-	ds := Datasource{}
+	ds := testDataSource{}
 
 	resp, err := ds.QueryData(
 		context.Background(),
