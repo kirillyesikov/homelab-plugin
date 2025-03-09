@@ -9,6 +9,6 @@ datasources:
     version: 1
     editable: true
     jsonData:
-      path: '/resources'
+      path: 'http://localhost:3000/api/health'
     secureJsonData:
       apiKey: 'api-key'
