@@ -50,7 +50,7 @@ export function ConfigEditor(props: Props) {
           id="config-editor-path"
           onChange={onPathChange}
           value={jsonData.path}
-          placeholder="Enter the path, e.g. /api/v1"
+          placeholder="http://localhost:3000/api/health"
           width={40}
         />
       </InlineField>
@@ -60,7 +60,7 @@ export function ConfigEditor(props: Props) {
           id="config-editor-api-key"
           isConfigured={secureJsonFields.apiKey}
           value={secureJsonData?.apiKey}
-          placeholder="Enter your API key"
+          placeholder="glsa_rJV1xHYSq9IXESgxnaxsq4NQa4fi15Yg_544cbebc"
           width={40}
           onReset={onResetAPIKey}
           onChange={onAPIKeyChange}
