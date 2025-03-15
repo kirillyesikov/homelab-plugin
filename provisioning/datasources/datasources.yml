@@ -11,4 +11,4 @@ datasources:
     jsonData:
       path: 'http://localhost:3000/api/health'
     secureJsonData:
-      apiKey: 'api-key'
+      apiKey: 'glsa_rJV1xHYSq9IXESgxnaxsq4NQa4fi15Yg_544cbebc'
