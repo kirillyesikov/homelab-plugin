@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -44,35 +45,69 @@ func (ds *testDataSource) Dispose() {
 }
 
 func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
-	// Handle request
+	if ds.httpClient == nil {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "httpClient is nil",
+		}, nil
+	}
+
 	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
 	if err != nil {
-		return nil, err
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "Failed to reach Grafana API",
+		}, err
 	}
-	resp.Body.Close()
-	return nil, nil
+	defer resp.Body.Close()
+
+	return &backend.CheckHealthResult{
+		Status:  backend.HealthStatusOk,
+		Message: "Datasource is healthy",
+	}, nil
 }
 
 func (ds *testDataSource) QueryData(_ context.Context, _ *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	var resp *backend.QueryDataResponse
-	// Handle request
-	httpResp, err := ds.httpClient.Get("http://localhost:3000/api/health")
-	if err != nil {
-		return nil, err
+	if ds.httpClient == nil {
+		return &backend.QueryDataResponse{
+			Responses: map[string]backend.DataResponse{
+				"error": {
+					Error: fmt.Errorf("datasource instance not found"),
+				},
+			},
+		}, nil
 	}
-	httpResp.Body.Close()
 
-	return resp, err
-}
-
-func (ds *testDataSource) handleTest(rw http.ResponseWriter, _ *http.Request) {
-	// Handle request
 	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
 	if err != nil {
-		rw.WriteHeader(500)
+		return &backend.QueryDataResponse{
+			Responses: map[string]backend.DataResponse{
+				"error": {
+					Error: err,
+				},
+			},
+		}, nil
+	}
+	defer resp.Body.Close()
+
+	return &backend.QueryDataResponse{}, nil
+}
+
+func (ds *testDataSource) handleTest(rw http.ResponseWriter, r *http.Request) {
+	if ds.httpClient == nil {
+		http.Error(rw, "httpClient is nil", http.StatusInternalServerError)
 		return
 	}
-	resp.Body.Close()
+
+	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
+	if err != nil {
+		http.Error(rw, "Failed to reach Grafana API: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	rw.WriteHeader(http.StatusOK)
+	rw.Write([]byte("Datasource is healthy"))
 }
 
 func main() {

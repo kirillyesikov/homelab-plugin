@@ -23,13 +23,22 @@ func LoadPluginSettings(source backend.DataSourceInstanceSettings) (*PluginSetti
 		return nil, fmt.Errorf("could not unmarshal PluginSettings json: %w", err)
 	}
 
-	settings.Secrets = loadSecretPluginSettings(source.DecryptedSecureJSONData)
+	// Handling both values returned from loadSecretPluginSettings
+	settings.Secrets, err = loadSecretPluginSettings(source.DecryptedSecureJSONData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load secret plugin settings: %w", err)
+	}
 
 	return &settings, nil
 }
 
-func loadSecretPluginSettings(source map[string]string) *SecretPluginSettings {
-	return &SecretPluginSettings{
-		ApiKey: source["apiKey"],
+func loadSecretPluginSettings(source map[string]string) (*SecretPluginSettings, error) {
+	apiKey, exists := source["apiKey"]
+	if !exists || apiKey == "" {
+		return nil, fmt.Errorf("apiKey is missing or empty")
 	}
+
+	return &SecretPluginSettings{
+		ApiKey: apiKey,
+	}, nil
 }
