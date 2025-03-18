@@ -1,0 +1,6 @@
+#Copy the plugin.json since the npx signs in the /dist dir
+
+npm run dev
+cp src/plugin.json dist/plugin.json
+npx @grafana/sign-plugin@latest --rootUrls http://localhost:3000
+docker compose up
