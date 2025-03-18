@@ -1,4 +1,4 @@
-module github.com/kirillyesikov/home-plugin
+module github.com/kirillyesikov/homelab-plugin/pkg
 
 go 1.23.5
 
