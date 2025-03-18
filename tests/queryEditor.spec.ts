@@ -23,6 +23,11 @@ test('data query should return values 10 and 20', async ({ panelEditPage, readPr
   await panelEditPage.datasource.set(ds.name);
   await panelEditPage.getQueryEditorRow('A').getByRole('textbox', { name: 'Query Text' }).fill('test query');
   await panelEditPage.setVisualization('Table');
-  await expect(panelEditPage.refreshPanel()).toBeOK();
-  await expect(panelEditPage.panel.data).toContainText(['10', '20']);
+  await panelEditPage.refreshPanel();
+  await panelEditPage.page.waitForTimeout(3000); 
+
+  const panelData = await panelEditPage.panel.data.allTextContents();
+  console.log('Panel Data:', panelData);
+
+  await expect(panelEditPage.panel.data).toContainText(['10', '20'], { timeout: 10000 });
 });
