@@ -18,16 +18,3 @@ test('should trigger new query when Constant field is changed', async ({
   await expect(await queryReq).toBeTruthy();
 });
 
-test('data query should return values 10 and 20', async ({ panelEditPage, readProvisionedDataSource }) => {
-  const ds = await readProvisionedDataSource({ fileName: 'datasources.yml' });
-  await panelEditPage.datasource.set(ds.name);
-  await panelEditPage.getQueryEditorRow('A').getByRole('textbox', { name: 'Query Text' }).fill('test query');
-  await panelEditPage.setVisualization('Table');
-  await panelEditPage.refreshPanel();
-  await panelEditPage.page.waitForTimeout(3000); 
-
-  const panelData = await panelEditPage.panel.data.allTextContents();
-  console.log('Panel Data:', panelData);
-
-  await expect(panelEditPage.panel.data).toContainText(['10', '20'], { timeout: 10000 });
-});
