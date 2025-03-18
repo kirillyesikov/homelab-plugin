@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"github.com/kirillyesikov/homelab-plugin/pkg/models"
+	"github.com/kirillyesikov/homelab-plugin"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
