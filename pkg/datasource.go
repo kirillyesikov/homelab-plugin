@@ -17,7 +17,7 @@ import (
 type testDataSource struct {
 	httpClient *http.Client
 	backend.CallResourceHandler
-	settings *backend.DataSourceInstanceSettings
+	settings *models.PluginSettings
 }
 
 func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
@@ -30,10 +30,14 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	if err != nil {
 		return nil, err
 	}
+	pluginSettings, err := models.LoadPluginSettings(settings)
+	if err != nil {
+            return nil, fmt.Errorf("failed to load plugin settings: %w", err)		
+        }
 
 	ds := &testDataSource{
 		httpClient: client,
-		settings:   &settings,
+		settings:   pluginSettings,
 	}
 
 	mux := http.NewServeMux()
