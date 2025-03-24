@@ -25,4 +25,9 @@
     "grafanaDependency": ">=10.4.0",
     "plugins": []
   }
+
+  "alerting": {
+     "enabled": true,
+     "path": "./module.js"
+  }
 }
