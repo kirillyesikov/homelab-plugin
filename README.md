@@ -9,6 +9,8 @@ This template is a starting point for building a Data Source Plugin for Grafana.
 
 Grafana supports a wide range of data sources, including Prometheus, MySQL, and even Datadog. There’s a good chance you can already visualize metrics from the systems you have set up. In some cases, though, you already have an in-house metrics solution that you’d like to add to your Grafana dashboards. Grafana Data Source Plugins enables integrating such solutions with Grafana.
 
+This one gives you a mock metrics API endpoint . API key authentication and a good reference point for the Query and CheckHealth functions . As well as a working CI integration and the proper use of grafana-sdk
+
 ## Getting started
 
 
