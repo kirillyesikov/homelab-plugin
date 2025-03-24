@@ -1,10 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
   "type": "datasource",
-  "name": "Kirill",
+  "name": "homelab-plugin",
   "id": "homelab-kirill-datasource",
   "metrics": true,
   "backend": true,
+  "alerting": true,
   "executable": "gpx_kirill",
   "info": {
     "description": "",
@@ -25,8 +26,4 @@
     "grafanaDependency": ">=10.4.0",
     "plugins": []
   },
-  "alerting": {
-     "enabled": true,
-     "path": "./module.js"
-  }
 }
