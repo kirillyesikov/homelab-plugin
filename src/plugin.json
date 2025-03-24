@@ -6,6 +6,9 @@
   "metrics": true,
   "backend": true,
   "alerting": true,
+  "metrics": true,
+  "tracing": true,
+  "logs": true,
   "executable": "gpx_kirill",
   "info": {
     "description": "",
