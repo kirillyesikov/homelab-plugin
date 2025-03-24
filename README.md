@@ -11,6 +11,22 @@ Grafana supports a wide range of data sources, including Prometheus, MySQL, and 
 
 ## Getting started
 
+
+### Frontend
+
+1. Install dependencies
+
+   ```bash
+   npm install
+   ```
+
+2. Build plugin in development mode and run in watch mode
+
+   ```bash
+   npm run dev
+   ```
+
+
 ### Backend
 
 1. Update [Grafana plugin SDK for Go](https://grafana.com/developers/plugin-tools/key-concepts/backend-plugins/grafana-plugin-sdk-for-go) dependency to the latest minor version:
@@ -31,28 +47,9 @@ Grafana supports a wide range of data sources, including Prometheus, MySQL, and 
    ```bash
    mage -l
    ```
+### Deploy with Docker
 
-### Frontend
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Build plugin in development mode and run in watch mode
-
-   ```bash
-   npm run dev
-   ```
-
-3. Build plugin in production mode
-
-   ```bash
-   npm run build
-   ```
-
-4. Deploy plugin as a docker container
+1. Deploy plugin as a docker container
    ```bash
    docker compose up --build
    ```
