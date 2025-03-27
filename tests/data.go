@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"github.com/kirillyesikov/homelab-plugin/pkg/models"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
@@ -16,6 +17,7 @@ import (
 type testDataSource struct {
 	httpClient *http.Client
 	backend.CallResourceHandler
+	settings *models.PluginSettings
 }
 
 func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
@@ -28,9 +30,14 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	if err != nil {
 		return nil, err
 	}
+	pluginSettings, err := models.LoadPluginSettings(settings)
+	if err != nil {
+            return nil, fmt.Errorf("failed to load plugin settings: %w", err)		
+        }
 
 	ds := &testDataSource{
 		httpClient: client,
+		settings:   pluginSettings,
 	}
 
 	mux := http.NewServeMux()
@@ -52,7 +59,27 @@ func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthR
 		}, nil
 	}
 
-	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
+	// Create a new HTTP request
+	req, err := http.NewRequest("GET", "http://localhost:3000/api/health", nil)
+	if err != nil {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "Failed to create request",
+		}, err
+	}
+
+	// Add API Key to Authorization header
+	if ds.settings.Secrets != nil && ds.settings.Secrets.ApiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
+	} else {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "API Key is missing",
+		}, nil
+	}
+
+	// Send the request
+	resp, err := ds.httpClient.Do(req)
 	if err != nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
@@ -60,6 +87,17 @@ func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthR
 		}, err
 	}
 	defer resp.Body.Close()
+
+	// Debugging: Print response status
+	fmt.Println("Health Check Response Status:", resp.Status)
+
+	// Check if response is 200 OK
+	if resp.StatusCode != http.StatusOK {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: fmt.Sprintf("Unexpected response: %s", resp.Status),
+		}, nil
+	}
 
 	return &backend.CheckHealthResult{
 		Status:  backend.HealthStatusOk,
@@ -78,6 +116,22 @@ func (ds *testDataSource) QueryData(_ context.Context, _ *backend.QueryDataReque
 		}, nil
 	}
 
+	req, err := http.NewRequest("GET", "http://localhost:3000/api/health", nil)
+	if err != nil {
+		return &backend.QueryDataResponse{
+			Responses: map[string]backend.DataResponse{
+				"error": {
+					Error: err,
+				},
+			},
+		}, nil
+	}
+
+	// Add API Key to Authorization header
+	if ds.settings.Secrets != nil && ds.settings.Secrets.ApiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
+	}
+
 	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
 	if err != nil {
 		return &backend.QueryDataResponse{
@@ -89,6 +143,8 @@ func (ds *testDataSource) QueryData(_ context.Context, _ *backend.QueryDataReque
 		}, nil
 	}
 	defer resp.Body.Close()
+
+	fmt.Println("Response Status:", resp.Status)
 
 	return &backend.QueryDataResponse{}, nil
 }
