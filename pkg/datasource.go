@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
-     	"os"
-        "sync" 
+	"os"
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -23,9 +25,8 @@ type testDataSource struct {
 	backend.CallResourceHandler
 	settings *models.PluginSettings
 }
+
 var registerMetricsOnce sync.Once
-
-
 
 var queriesTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -60,9 +61,10 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	mux.HandleFunc("/test", ds.handleTest)
 	mux.Handle("/metrics", promhttp.Handler())
 	prometheus.MustRegister(queriesTotal)
-        registerMetricsOnce.Do(func() {
-	    prometheus.MustRegister(queriesTotal)
-        })    
+
+	registerMetricsOnce.Do(func() {
+		prometheus.MustRegister(queriesTotal)
+	})
 
 	ds.CallResourceHandler = httpadapter.New(mux)
 
@@ -100,12 +102,14 @@ func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthR
 	if err != nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "Failed to reach Grafana API",
+			Message: fmt.Sprintf("Failed to reach Grafana API: %v", err),
 		}, err
 	}
 	defer resp.Body.Close()
 
 	fmt.Println("Health Check Response Status:", resp.Status)
+	body, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println("Health Check Response Body:", string(body))
 
 	if resp.StatusCode != http.StatusOK {
 		return &backend.CheckHealthResult{
@@ -156,4 +160,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
