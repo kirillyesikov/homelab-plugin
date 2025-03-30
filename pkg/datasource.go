@@ -63,7 +63,6 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		settings:   pluginSettings,
 	}
 
-	registerMetrics()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/test", ds.handleTest)
@@ -72,7 +71,6 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	})	
 
 
-	prometheus.MustRegister(queriesTotal)
 
 	ds.CallResourceHandler = httpadapter.New(mux)
 
