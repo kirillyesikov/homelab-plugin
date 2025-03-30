@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -77,19 +77,20 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 
 func (ds *testDataSource) Dispose() {}
 
-func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	if ds.httpClient == nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "httpClient is nil",
+			Message: "HTTP client is not initialized",
 		}, nil
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost:3000/api/plugins/homelab-kirill-datasource/metrics", nil)
+	url := "http://localhost:3000/api/plugins/homelab-kirill-datasource/metrics"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "Failed to create request",
+			Message: "Failed to create health check request",
 		}, err
 	}
 
@@ -98,7 +99,7 @@ func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthR
 	} else {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "API Key is missing",
+			Message: "Missing API key in plugin settings",
 		}, nil
 	}
 
@@ -106,14 +107,15 @@ func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthR
 	if err != nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: fmt.Sprintf("Failed to reach Grafana API: %v", err),
-		}, err
+			Message: fmt.Sprintf("Request error: %v", err),
+		}, nil
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("Health Check Response Status:", resp.Status)
-	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println("Health Check Response Body:", string(body))
+	body, _ := io.ReadAll(resp.Body)
+
+	fmt.Println("CheckHealth Response Status:", resp.Status)
+	fmt.Println("CheckHealth Response Body:", string(body))
 
 	if resp.StatusCode != http.StatusOK {
 		return &backend.CheckHealthResult{
