@@ -28,6 +28,12 @@ type testDataSource struct {
 
 var registerMetricsOnce sync.Once
 
+func registerMetrics() {
+	registerMetricsOnce.Do(func() {
+		prometheus.MustRegister(queriesTotal)
+	})
+}
+
 var queriesTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Namespace: "grafana_plugin",
@@ -57,14 +63,12 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		settings:   pluginSettings,
 	}
 
+	registerMetrics()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/test", ds.handleTest)
 	mux.Handle("/metrics", promhttp.Handler())
 	prometheus.MustRegister(queriesTotal)
-
-	registerMetricsOnce.Do(func() {
-		prometheus.MustRegister(queriesTotal)
-	})
 
 	ds.CallResourceHandler = httpadapter.New(mux)
 
@@ -160,3 +164,4 @@ func main() {
 		os.Exit(1)
 	}
 }
+
