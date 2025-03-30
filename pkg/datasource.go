@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-
+     	"os"
+        "sync" 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -23,6 +23,9 @@ type testDataSource struct {
 	backend.CallResourceHandler
 	settings *models.PluginSettings
 }
+var registerMetricsOnce sync.Once
+
+
 
 var queriesTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -57,6 +60,10 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	mux.HandleFunc("/test", ds.handleTest)
 	mux.Handle("/metrics", promhttp.Handler())
 	prometheus.MustRegister(queriesTotal)
+        registerMetricsOnce.Do(func() {
+	    prometheus.MustRegister(queriesTotal)
+        })    
+
 	ds.CallResourceHandler = httpadapter.New(mux)
 
 	return ds, nil
