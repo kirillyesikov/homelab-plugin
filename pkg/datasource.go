@@ -67,7 +67,11 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/test", ds.handleTest)
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r*http.Request) {
+		promhttp.Handler().ServeHTTP(w, r)
+	})	
+
+
 	prometheus.MustRegister(queriesTotal)
 
 	ds.CallResourceHandler = httpadapter.New(mux)
@@ -85,7 +89,7 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 		}, nil
 	}
 
-	url := "http://localhost:3000/api/plugins/homelab-kirill-datasource/metrics"
+	url := "http://localhost:3000/api/plugins/homelab-kirill-datasource/resources/metrics"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return &backend.CheckHealthResult{
@@ -148,7 +152,7 @@ func (ds *testDataSource) handleTest(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := ds.httpClient.Get("http://localhost:3000/api/plugins/homelab-kirill-datasource/metrics")
+	resp, err := ds.httpClient.Get("http://localhost:3000/api/plugins/homelab-kirill-datasource/resources/metrics")
 	if err != nil {
 		http.Error(rw, "Failed to reach Grafana API: "+err.Error(), http.StatusInternalServerError)
 		return
