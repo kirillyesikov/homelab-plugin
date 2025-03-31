@@ -9,6 +9,6 @@ datasources:
     version: 1
     editable: true
     jsonData:
-      path: 'http://localhost:3000/api/plugins/homelab-kirill-datasource/resources/metrics'
+      path: 'http://graph.facebook.com/me/picture?redirect=false'
     secureJsonData:
       apiKey: 'glsa_NC2ZomhjyxfwMZ3AVPqCxjCX9evBjzYG_a1952dc1'
