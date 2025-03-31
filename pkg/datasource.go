@@ -46,7 +46,7 @@ var queriesTotal = prometheus.NewCounterVec(
 func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 	backend.Logger.Info("Initializing new data source...")
 
-	// ✅ Validate settings
+
 	if settings.UID == "" {
 		backend.Logger.Error("Data source instance settings are missing")
 		return nil, fmt.Errorf("data source instance settings cannot be nil")
@@ -80,15 +80,28 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 func (ds *testDataSource) Dispose() {}
 
 func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+	backend.Logger.Info("CheckHealth called")
+
+	
+	if ds.settings == nil {
+		backend.Logger.Error("CheckHealth failed: Data source settings are nil")
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "Data source settings are not initialized",
+		}, nil
+	}
+
 	if ds.httpClient == nil {
+		backend.Logger.Error("CheckHealth failed: HTTP client is nil")
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
 			Message: "HTTP client is not initialized",
 		}, nil
 	}
 
-	url := "http://localhost:3000/api/plugins/homelab-kirill-datasource/resources/metrics"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+
+	testURL := "http://localhost:3000/api/plugins/homelab-kirill-datasource/resources/metrics" + ds.settings.Secrets.ApiKey
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
 	if err != nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
@@ -96,17 +109,20 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 		}, err
 	}
 
-	if ds.settings.Secrets != nil && ds.settings.Secrets.ApiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
-	} else {
+	
+	if ds.settings.Secrets == nil || ds.settings.Secrets.ApiKey == "" {
+		backend.Logger.Error("CheckHealth failed: Missing API key")
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
 			Message: "Missing API key in plugin settings",
 		}, nil
 	}
+	req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
 
+	
 	resp, err := ds.httpClient.Do(req)
 	if err != nil {
+		backend.Logger.Error("CheckHealth request failed", "error", err)
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
 			Message: fmt.Sprintf("Request error: %v", err),
@@ -114,10 +130,10 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
 
-	fmt.Println("CheckHealth Response Status:", resp.Status)
-	fmt.Println("CheckHealth Response Body:", string(body))
+	body, _ := io.ReadAll(resp.Body)
+	backend.Logger.Info("CheckHealth response", "status", resp.Status, "body", string(body))
+
 
 	if resp.StatusCode != http.StatusOK {
 		return &backend.CheckHealthResult{
@@ -131,6 +147,7 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 		Message: "Datasource is healthy",
 	}, nil
 }
+
 
 func (ds *testDataSource) QueryData(_ context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	for _, q := range req.Queries {
