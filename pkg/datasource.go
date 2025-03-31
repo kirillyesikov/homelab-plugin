@@ -167,7 +167,7 @@ func (ds *testDataSource) handleTest(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := ds.httpClient.Get("http://graph.facebook.com/facebook/picture?redirect=false")
+	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
 	if err != nil {
 		http.Error(rw, "Failed to reach Grafana API: "+err.Error(), http.StatusInternalServerError)
 		return
