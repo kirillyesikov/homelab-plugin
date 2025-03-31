@@ -9,6 +9,6 @@ datasources:
     version: 1
     editable: true
     jsonData:
-      path: ''
+      path: 'http://localhost:3000/api/health'
     secureJsonData:
-      apiKey: ''
+      apiKey: 'glsa_NC2ZomhjyxfwMZ3AVPqCxjCX9evBjzYG_a1952dc1'
