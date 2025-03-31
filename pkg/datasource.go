@@ -100,7 +100,7 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 	}
 
 
-	testURL := "https://graph.facebook.com/facebook/picture?redirect=false" + ds.settings.Secrets.ApiKey
+	testURL := "http://graph.facebook.com/facebook/picture?redirect=false" + ds.settings.Secrets.ApiKey
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
 	if err != nil {
 		return &backend.CheckHealthResult{
@@ -167,7 +167,7 @@ func (ds *testDataSource) handleTest(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := ds.httpClient.Get("https://graph.facebook.com/facebook/picture?redirect=false")
+	resp, err := ds.httpClient.Get("http://graph.facebook.com/facebook/picture?redirect=false")
 	if err != nil {
 		http.Error(rw, "Failed to reach Grafana API: "+err.Error(), http.StatusInternalServerError)
 		return
