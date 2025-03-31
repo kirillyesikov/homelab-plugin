@@ -100,7 +100,7 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 	}
 
 
-	testURL := "http://graph.facebook.com/facebook/picture?redirect=false" + ds.settings.Secrets.ApiKey
+	testURL := "http://localhost:3000/api/health" + ds.settings.Secrets.ApiKey
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
 	if err != nil {
 		return &backend.CheckHealthResult{
