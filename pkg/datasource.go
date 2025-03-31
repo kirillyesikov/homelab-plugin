@@ -44,6 +44,14 @@ var queriesTotal = prometheus.NewCounterVec(
 )
 
 func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+	backend.Logger.Info("Initializing new data source...")
+
+	// ✅ Validate settings
+	if settings.UID == "" {
+		backend.Logger.Error("Data source instance settings are missing")
+		return nil, fmt.Errorf("data source instance settings cannot be nil")
+	}
+
 	opts, err := settings.HTTPClientOptions(ctx)
 	if err != nil {
 		return nil, err
@@ -58,24 +66,16 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	if err != nil {
 		return nil, fmt.Errorf("failed to load plugin settings: %w", err)
 	}
+
 	ds := &testDataSource{
 		httpClient: client,
 		settings:   pluginSettings,
 	}
 
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/test", ds.handleTest)
-	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r*http.Request) {
-		promhttp.Handler().ServeHTTP(w, r)
-	})	
-
-
-
-	ds.CallResourceHandler = httpadapter.New(mux)
-
+	backend.Logger.Info("Data source initialized successfully")
 	return ds, nil
 }
+
 
 func (ds *testDataSource) Dispose() {}
 
