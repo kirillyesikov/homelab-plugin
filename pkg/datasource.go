@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,7 +17,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
-
+	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/kirillyesikov/homelab-plugin/pkg/models"
 )
 
@@ -162,12 +165,9 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 	}, nil
 }
 
-
-
-
 func startMetricsServer() {
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())  // Serve metrics
+		http.Handle("/metrics", promhttp.Handler()) // Serve metrics
 		backend.Logger.Info("Starting metrics server on :2112")
 		if err := http.ListenAndServe(":2112", nil); err != nil {
 			backend.Logger.Error("Metrics server failed", "error", err)
@@ -175,11 +175,7 @@ func startMetricsServer() {
 	}()
 }
 
-
-
-
 func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	// Example: Scrape metrics from the provided endpoint
 	metricsURL := "http://172.18.0.2:2112/metrics"
 	metricsResp, err := ds.httpClient.Get(metricsURL)
 	if err != nil {
@@ -187,27 +183,50 @@ func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataR
 	}
 	defer metricsResp.Body.Close()
 
-	// Read the body and extract Prometheus metrics
 	metricsBody, err := io.ReadAll(metricsResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metrics response: %w", err)
 	}
 
-	// Process the metrics (you can add logic to parse specific metrics)
 	metricsData := string(metricsBody)
 	backend.Logger.Info("Fetched metrics data: ", "data", metricsData)
 
-	// For now, just return an empty response as a placeholder
+	// Parse Prometheus metrics (example: extract a sample metric)
+	var metricName, metricValue string
+	lines := strings.Split(metricsData, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "seconds") { // Change to your actual metric
+			parts := strings.Fields(line)
+			if len(parts) == 2 {
+				metricName = parts[0]
+				metricValue = parts[1]
+				break
+			}
+		}
+	}
+
+	// Create a DataFrame to return the metric
+	frame := data.NewFrame("metrics",
+		data.NewField("metric_name", nil, []string{metricName}),
+		data.NewField("metric_value", nil, []float64{toFloat(metricValue)}),
+	)
+
 	return &backend.QueryDataResponse{
 		Responses: map[string]backend.DataResponse{
 			"default": {
-				Frames: []data.Frame{},
+				Frames: data.Frames{frame},
 			},
 		},
 	}, nil
 }
 
-
+// Helper function to convert string to float64 safely
+func toFloat(value string) float64 {
+	if f, err := strconv.ParseFloat(value, 64); err == nil {
+		return f
+	}
+	return 0
+}
 
 func main() {
 	startMetricsServer() // Start Prometheus metrics server
