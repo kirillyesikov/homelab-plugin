@@ -163,16 +163,8 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 	}, nil
 }
 
-func (ds *testDataSource) QueryData(_ context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	for _, q := range req.Queries {
-		queriesTotal.WithLabelValues(q.QueryType).Inc()
-	}
-	return &backend.QueryDataResponse{
-		Responses: map[string]backend.DataResponse{
-			"default": {},
-		},
-	}, nil
-}
+
+
 
 func startMetricsServer() {
 	go func() {
@@ -183,6 +175,40 @@ func startMetricsServer() {
 		}
 	}()
 }
+
+
+
+
+func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	// Example: Scrape metrics from the provided endpoint
+	metricsURL := "http://172.18.0.2:2112/metrics"
+	metricsResp, err := ds.httpClient.Get(metricsURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch metrics from endpoint: %w", err)
+	}
+	defer metricsResp.Body.Close()
+
+	// Read the body and extract Prometheus metrics
+	metricsBody, err := io.ReadAll(metricsResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metrics response: %w", err)
+	}
+
+	// Process the metrics (you can add logic to parse specific metrics)
+	metricsData := string(metricsBody)
+	backend.Logger.Info("Fetched metrics data: ", "data", metricsData)
+
+	// For now, just return an empty response as a placeholder
+	return &backend.QueryDataResponse{
+		Responses: map[string]backend.DataResponse{
+			"default": {
+				Frames: []data.Frame{},
+			},
+		},
+	}, nil
+}
+
+
 
 func main() {
 	startMetricsServer() // Start Prometheus metrics server
