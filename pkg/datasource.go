@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -184,12 +183,13 @@ func startMetricsServer() {
 }
 
 func main() {
-	startMetricsServer()
+     go	startMetricsServer()
 	err := datasource.Manage("homelab-kirill-datasource", newDataSource, datasource.ManageOpts{})
 	if err != nil {
 		backend.Logger.Error(err.Error())
 		os.Exit(1)
 	}
+	select {}
 }
 
 
