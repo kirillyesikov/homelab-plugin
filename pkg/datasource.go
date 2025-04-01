@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"io"
 	"time"
+	"github.com/grafana/grafana-plugin-sdk-go/data"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -215,6 +217,7 @@ func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataR
 		Responses: map[string]backend.DataResponse{
 			"default": {
 				Frames: data.Frames{frame},
+
 			},
 		},
 	}, nil
