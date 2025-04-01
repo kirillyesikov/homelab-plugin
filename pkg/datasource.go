@@ -175,21 +175,20 @@ func (ds *testDataSource) QueryData(_ context.Context, req *backend.QueryDataReq
 }
 
 func startMetricsServer() {
-	http.Handle("/metrics", promhttp.Handler())
 	go func() {
-		backend.Logger.Info("Starting Prometheus metrics server on :2112")
-		http.ListenAndServe(":2112", nil)
+		http.Handle("/metrics", promhttp.Handler())  // Serve metrics
+		backend.Logger.Info("Starting metrics server on :2112")
+		if err := http.ListenAndServe(":2112", nil); err != nil {
+			backend.Logger.Error("Metrics server failed", "error", err)
+		}
 	}()
 }
 
 func main() {
-     go	startMetricsServer()
+	startMetricsServer() // Start Prometheus metrics server
 	err := datasource.Manage("homelab-kirill-datasource", newDataSource, datasource.ManageOpts{})
 	if err != nil {
 		backend.Logger.Error(err.Error())
-		os.Exit(1)
 	}
-	select {}
 }
-
 
