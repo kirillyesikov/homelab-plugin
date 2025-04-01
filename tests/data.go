@@ -1,17 +1,25 @@
+
+
 package main
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
-	"github.com/kirillyesikov/homelab-plugin/pkg/models"
+	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
+	
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
+	
+
+	"github.com/kirillyesikov/homelab-plugin/pkg/models"
 )
 
 type testDataSource struct {
@@ -20,7 +28,32 @@ type testDataSource struct {
 	settings *models.PluginSettings
 }
 
+var registerMetricsOnce sync.Once
+
+func registerMetrics() {
+	registerMetricsOnce.Do(func() {
+		prometheus.MustRegister(queriesTotal)
+	})
+}
+
+var queriesTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Namespace: "grafana_plugin",
+		Name:      "queries_total",
+		Help:      "Total number of queries.",
+	},
+	[]string{"query_type"},
+)
+
 func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+	backend.Logger.Info("Initializing new data source...")
+
+
+	if settings.UID == "" {
+		backend.Logger.Error("Data source instance settings are missing")
+		return nil, fmt.Errorf("data source instance settings cannot be nil")
+	}
+
 	opts, err := settings.HTTPClientOptions(ctx)
 	if err != nil {
 		return nil, err
@@ -30,68 +63,80 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	if err != nil {
 		return nil, err
 	}
+
 	pluginSettings, err := models.LoadPluginSettings(settings)
 	if err != nil {
-            return nil, fmt.Errorf("failed to load plugin settings: %w", err)		
-        }
+		return nil, fmt.Errorf("failed to load plugin settings: %w", err)
+	}
 
 	ds := &testDataSource{
 		httpClient: client,
 		settings:   pluginSettings,
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/test", ds.handleTest)
-	ds.CallResourceHandler = httpadapter.New(mux)
-
+	backend.Logger.Info("Data source initialized successfully")
 	return ds, nil
 }
 
-func (ds *testDataSource) Dispose() {
-	// Cleanup
-}
 
-func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
-	if ds.httpClient == nil {
+func (ds *testDataSource) Dispose() {}
+
+func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+	backend.Logger.Info("CheckHealth called")
+
+	
+	if ds.settings == nil {
+		backend.Logger.Error("CheckHealth failed: Data source settings are nil")
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "httpClient is nil",
+			Message: "Data source settings are not initialized",
 		}, nil
 	}
 
-	// Create a new HTTP request
-	req, err := http.NewRequest("GET", "http://localhost:3000/api/health", nil)
+	if ds.httpClient == nil {
+		backend.Logger.Error("CheckHealth failed: HTTP client is nil")
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "HTTP client is not initialized",
+		}, nil
+	}
+
+
+	testURL := "http://localhost:3000/api/health" 
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
 	if err != nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "Failed to create request",
+			Message: "Failed to create health check request",
 		}, err
 	}
 
-	// Add API Key to Authorization header
-	if ds.settings.Secrets != nil && ds.settings.Secrets.ApiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
-	} else {
+	
+	if ds.settings.Secrets == nil || ds.settings.Secrets.ApiKey == "" {
+		backend.Logger.Error("CheckHealth failed: Missing API key")
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "API Key is missing",
+			Message: "Missing API key in plugin settings",
 		}, nil
 	}
+	req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
 
-	// Send the request
+	
 	resp, err := ds.httpClient.Do(req)
 	if err != nil {
+		backend.Logger.Error("CheckHealth request failed", "error", err)
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "Failed to reach Grafana API",
-		}, err
+			Message: fmt.Sprintf("Request error: %v", err),
+		}, nil
 	}
 	defer resp.Body.Close()
 
-	// Debugging: Print response status
-	fmt.Println("Health Check Response Status:", resp.Status)
 
-	// Check if response is 200 OK
+	body, _ := io.ReadAll(resp.Body)
+	backend.Logger.Info("CheckHealth response", "status", resp.Status, "body", string(body))
+
+
 	if resp.StatusCode != http.StatusOK {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
@@ -105,48 +150,17 @@ func (ds *testDataSource) CheckHealth(_ context.Context, _ *backend.CheckHealthR
 	}, nil
 }
 
-func (ds *testDataSource) QueryData(_ context.Context, _ *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	if ds.httpClient == nil {
-		return &backend.QueryDataResponse{
-			Responses: map[string]backend.DataResponse{
-				"error": {
-					Error: fmt.Errorf("datasource instance not found"),
-				},
-			},
-		}, nil
+
+func (ds *testDataSource) QueryData(_ context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	for _, q := range req.Queries {
+		queriesTotal.WithLabelValues(q.QueryType).Inc()
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost:3000/api/health", nil)
-	if err != nil {
-		return &backend.QueryDataResponse{
-			Responses: map[string]backend.DataResponse{
-				"error": {
-					Error: err,
-				},
-			},
-		}, nil
-	}
-
-	// Add API Key to Authorization header
-	if ds.settings.Secrets != nil && ds.settings.Secrets.ApiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
-	}
-
-	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
-	if err != nil {
-		return &backend.QueryDataResponse{
-			Responses: map[string]backend.DataResponse{
-				"error": {
-					Error: err,
-				},
-			},
-		}, nil
-	}
-	defer resp.Body.Close()
-
-	fmt.Println("Response Status:", resp.Status)
-
-	return &backend.QueryDataResponse{}, nil
+	return &backend.QueryDataResponse{
+		Responses: map[string]backend.DataResponse{
+			"default": {},
+		},
+	}, nil
 }
 
 func (ds *testDataSource) handleTest(rw http.ResponseWriter, r *http.Request) {
