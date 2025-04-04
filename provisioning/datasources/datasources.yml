@@ -9,6 +9,6 @@ datasources:
     version: 1
     editable: true
     jsonData:
-      path: ''
+      path: '/path'
     secureJsonData:
-      apiKey: ''
+      apiKey: 'grafana API KEY'
