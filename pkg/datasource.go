@@ -195,7 +195,7 @@ func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataR
 	var metricName, metricValue string
 	lines := strings.Split(metricsData, "\n")
 	for _, line := range lines {
-		if strings.HasPrefix(line, "grpc_server") { // Change to your actual metric
+		if strings.HasPrefix(line, "go_gc_duration_seconds") { // Change to your actual metric
 			parts := strings.Fields(line)
 			if len(parts) == 2 {
 				metricName = parts[0]
