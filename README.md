@@ -31,20 +31,13 @@ This one gives you a mock metrics API endpoint . API key authentication and a go
 
 ### Backend
 
-1. Update [Grafana plugin SDK for Go](https://grafana.com/developers/plugin-tools/key-concepts/backend-plugins/grafana-plugin-sdk-for-go) dependency to the latest minor version:
-
-   ```bash
-   go get -u github.com/grafana/grafana-plugin-sdk-go
-   go mod tidy
-   ```
-
-2. Build backend plugin binaries for Linux, Windows and Darwin:
+1. Build backend plugin binaries for Linux, Windows and Darwin:
 
    ```bash
    mage -v build:<provider>
    ```
 
-3. List all available Mage targets for additional commands:
+2. List all available Mage targets for additional commands:
 
    ```bash
    mage -l
