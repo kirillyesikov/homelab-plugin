@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -26,6 +27,11 @@ type testDataSource struct {
 	backend.CallResourceHandler
 	settings *models.PluginSettings
 }
+
+type Query struct {
+	Metric string `json:"metric"`
+} 
+
 
 var (
 	registerMetricsOnce sync.Once
