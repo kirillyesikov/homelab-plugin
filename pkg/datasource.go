@@ -182,6 +182,30 @@ func startMetricsServer() {
 }
 
 func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	// Initialize an empty metric name variable
+	var metricName string
+
+	// Loop through the queries in the request
+	for _, query := range req.Queries {
+		// Unmarshal JSON query into a map or struct to access user-defined parameters
+		var q Query
+		if err := json.Unmarshal(query.JSON, &q); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal query JSON: %w", err)
+		}
+
+		// If a metric was specified, use it
+		if q.Metric != "" {
+			metricName = q.Metric
+			break
+		}
+	}
+
+	// If no metric name is provided, return an error
+	if metricName == "" {
+		return nil, fmt.Errorf("no metric specified in the query")
+	}
+
+	// Fetch the metrics data from the Prometheus endpoint
 	metricsURL := "http://172.18.0.2:2112/metrics"
 	metricsResp, err := ds.httpClient.Get(metricsURL)
 	if err != nil {
@@ -195,20 +219,24 @@ func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataR
 	}
 
 	metricsData := string(metricsBody)
-	backend.Logger.Info("Fetched metrics data: ", "data", metricsData)
+	backend.Logger.Info("Fetched metrics data")
 
-	// Parse Prometheus metrics (example: extract a sample metric)
-	var metricName, metricValue string
+	// Parse the Prometheus metrics and search for the user-defined metric
+	var metricValue string
 	lines := strings.Split(metricsData, "\n")
 	for _, line := range lines {
-		if strings.HasPrefix(line, "go_gc_duration_seconds") { // Change to your actual metric
+		if strings.HasPrefix(line, metricName) { // Look for the user-defined metric
 			parts := strings.Fields(line)
 			if len(parts) == 2 {
-				metricName = parts[0]
 				metricValue = parts[1]
 				break
 			}
 		}
+	}
+
+	// If the metric is not found, return an error
+	if metricValue == "" {
+		return nil, fmt.Errorf("metric %s not found", metricName)
 	}
 
 	// Create a DataFrame to return the metric
@@ -217,11 +245,11 @@ func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataR
 		data.NewField("metric_value", nil, []float64{toFloat(metricValue)}),
 	)
 
+	// Return the response with the metric data
 	return &backend.QueryDataResponse{
 		Responses: map[string]backend.DataResponse{
 			"default": {
 				Frames: data.Frames{frame},
-
 			},
 		},
 	}, nil
@@ -234,6 +262,7 @@ func toFloat(value string) float64 {
 	}
 	return 0
 }
+
 
 func main() {
 	startMetricsServer() // Start Prometheus metrics server
