@@ -1,24 +1,23 @@
-
-
 package main
 
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
+	"strconv"
+	"strings"
 	"sync"
+	"io"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
-	
-
+	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/kirillyesikov/homelab-plugin/pkg/models"
 )
 
@@ -28,31 +27,51 @@ type testDataSource struct {
 	settings *models.PluginSettings
 }
 
-var registerMetricsOnce sync.Once
+var (
+	registerMetricsOnce sync.Once
+
+	queriesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "grafana_plugin",
+			Name:      "queries_total",
+			Help:      "Total number of queries.",
+		},
+		[]string{"query_type"},
+	)
+
+	healthCheckTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "grafana_plugin",
+			Name:      "health_checks_total",
+			Help:      "Total number of health check calls.",
+		},
+	)
+
+	healthCheckDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "grafana_plugin",
+			Name:      "health_check_duration_seconds",
+			Help:      "Duration of health check requests.",
+			Buckets:   prometheus.DefBuckets,
+		},
+	)
+)
 
 func registerMetrics() {
 	registerMetricsOnce.Do(func() {
-		prometheus.MustRegister(queriesTotal)
+		prometheus.MustRegister(queriesTotal, healthCheckTotal, healthCheckDuration)
 	})
 }
 
-var queriesTotal = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Namespace: "grafana_plugin",
-		Name:      "queries_total",
-		Help:      "Total number of queries.",
-	},
-	[]string{"query_type"},
-)
-
 func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 	backend.Logger.Info("Initializing new data source...")
-
 
 	if settings.UID == "" {
 		backend.Logger.Error("Data source instance settings are missing")
 		return nil, fmt.Errorf("data source instance settings cannot be nil")
 	}
+
+	registerMetrics() // Ensure metrics are registered
 
 	opts, err := settings.HTTPClientOptions(ctx)
 	if err != nil {
@@ -78,13 +97,17 @@ func newDataSource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	return ds, nil
 }
 
-
 func (ds *testDataSource) Dispose() {}
 
 func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	backend.Logger.Info("CheckHealth called")
+	healthCheckTotal.Inc() // Increment health check count
 
-	
+	start := time.Now()
+	defer func() {
+		healthCheckDuration.Observe(time.Since(start).Seconds())
+	}()
+
 	if ds.settings == nil {
 		backend.Logger.Error("CheckHealth failed: Data source settings are nil")
 		return &backend.CheckHealthResult{
@@ -101,8 +124,7 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 		}, nil
 	}
 
-
-	testURL := "http://localhost:3000/api/health" 
+	testURL := "http://localhost:3000/api/health"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
 	if err != nil {
 		return &backend.CheckHealthResult{
@@ -111,7 +133,6 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 		}, err
 	}
 
-	
 	if ds.settings.Secrets == nil || ds.settings.Secrets.ApiKey == "" {
 		backend.Logger.Error("CheckHealth failed: Missing API key")
 		return &backend.CheckHealthResult{
@@ -121,7 +142,6 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 	}
 	req.Header.Set("Authorization", "Bearer "+ds.settings.Secrets.ApiKey)
 
-	
 	resp, err := ds.httpClient.Do(req)
 	if err != nil {
 		backend.Logger.Error("CheckHealth request failed", "error", err)
@@ -131,11 +151,6 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 		}, nil
 	}
 	defer resp.Body.Close()
-
-
-	body, _ := io.ReadAll(resp.Body)
-	backend.Logger.Info("CheckHealth response", "status", resp.Status, "body", string(body))
-
 
 	if resp.StatusCode != http.StatusOK {
 		return &backend.CheckHealthResult{
@@ -150,40 +165,74 @@ func (ds *testDataSource) CheckHealth(ctx context.Context, _ *backend.CheckHealt
 	}, nil
 }
 
+func startMetricsServer() {
+	go func() {
+		http.Handle("/metrics", promhttp.Handler()) // Serve metrics
+		backend.Logger.Info("Starting metrics server on :2112")
+		if err := http.ListenAndServe(":2112", nil); err != nil {
+			backend.Logger.Error("Metrics server failed", "error", err)
+		}
+	}()
+}
 
-func (ds *testDataSource) QueryData(_ context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	for _, q := range req.Queries {
-		queriesTotal.WithLabelValues(q.QueryType).Inc()
+func (ds *testDataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	metricsURL := "http://172.18.0.2:2112/metrics"
+	metricsResp, err := ds.httpClient.Get(metricsURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch metrics from endpoint: %w", err)
 	}
+	defer metricsResp.Body.Close()
+
+	metricsBody, err := io.ReadAll(metricsResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metrics response: %w", err)
+	}
+
+	metricsData := string(metricsBody)
+	backend.Logger.Info("Fetched metrics data: ", "data", metricsData)
+
+	// Parse Prometheus metrics (example: extract a sample metric)
+	var metricName, metricValue string
+	lines := strings.Split(metricsData, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "go_gc_duration_seconds") { // Change to your actual metric
+			parts := strings.Fields(line)
+			if len(parts) == 2 {
+				metricName = parts[0]
+				metricValue = parts[1]
+				break
+			}
+		}
+	}
+
+	// Create a DataFrame to return the metric
+	frame := data.NewFrame("metrics",
+		data.NewField("metric_name", nil, []string{metricName}),
+		data.NewField("metric_value", nil, []float64{toFloat(metricValue)}),
+	)
 
 	return &backend.QueryDataResponse{
 		Responses: map[string]backend.DataResponse{
-			"default": {},
+			"default": {
+				Frames: data.Frames{frame},
+
+			},
 		},
 	}, nil
 }
 
-func (ds *testDataSource) handleTest(rw http.ResponseWriter, r *http.Request) {
-	if ds.httpClient == nil {
-		http.Error(rw, "httpClient is nil", http.StatusInternalServerError)
-		return
+// Helper function to convert string to float64 safely
+func toFloat(value string) float64 {
+	if f, err := strconv.ParseFloat(value, 64); err == nil {
+		return f
 	}
-
-	resp, err := ds.httpClient.Get("http://localhost:3000/api/health")
-	if err != nil {
-		http.Error(rw, "Failed to reach Grafana API: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	rw.WriteHeader(http.StatusOK)
-	rw.Write([]byte("Datasource is healthy"))
+	return 0
 }
 
 func main() {
+	startMetricsServer() // Start Prometheus metrics server
 	err := datasource.Manage("homelab-kirill-datasource", newDataSource, datasource.ManageOpts{})
 	if err != nil {
 		backend.Logger.Error(err.Error())
-		os.Exit(1)
 	}
 }
